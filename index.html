@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AI S.O.S Guardian - Auto Analysis</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background: #0b0b0b; color: white; text-align: center; margin: 0; padding: 20px; }
+    .header { color: #00e5ff; margin-bottom: 20px; }
+    .container { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
+    .video-container { position: relative; background: #000; border: 4px solid #333; border-radius: 12px; line-height: 0; }
+    video { max-width: 800px; height: auto; border-radius: 8px; }
+    canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    .panel { width: 320px; background: #1a1a1a; padding: 25px; border-radius: 12px; text-align: left; border-left: 10px solid #4CAF50; transition: 0.3s; }
+    .alert-active { border-left-color: #ff3d00; background: #331111; box-shadow: 0 0 20px rgba(255, 61, 0, 0.4); }
+    .status-badge { font-size: 22px; font-weight: bold; margin-bottom: 15px; }
+  </style>
+</head>
+
+<body>
+  <h1 class="header">🛡️ S.O.S. Guardian Drone: AI Auto-Analyse</h1>
+  
+  <div class="container">
+    <div class="video-container">
+      <video id="input_video" src="drone_video.mp4" crossorigin="anonymous" controls loop muted></video>
+      <canvas id="output_canvas"></canvas>
+    </div>
+
+    <div id="sidePanel" class="panel">
+      <div id="statusLabel" class="status-badge" style="color: #4CAF50;">✅ SISTEM NORMAL</div>
+      <p><b>Mod:</b> Deep Visual Analysis</p>
+      <p id="infoText">Drone sedang mengimbas kawasan untuk isyarat lambaian...</p>
+      <hr style="border: 0.5px solid #444;">
+      <p><b>Lokasi:</b> Padang KMPP</p>
+      <p id="gpsCoord"><b>GPS:</b> Scanning...</p>
+    </div>
+  </div>
+
+  <script type="module">
+    const videoElement = document.getElementById('input_video');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const sidePanel = document.getElementById('sidePanel');
+    const statusLabel = document.getElementById('statusLabel');
+    const infoText = document.getElementById('infoText');
+    const gpsCoord = document.getElementById('gpsCoord');
+
+    function onResults(results) {
+      canvasElement.width = videoElement.videoWidth;
+      canvasElement.height = videoElement.videoHeight;
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      
+      let detected = false;
+
+      if (results.multiHandLandmarks) {
+        for (const landmarks of results.multiHandLandmarks) {
+          // Melukis titik-titik biometrik (Skeleton)
+          drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
+          drawLandmarks(canvasCtx, landmarks, {color: '#FFFFFF', lineWidth: 1});
+
+          // LOGIK AUTO: Jika Jari Tengah (Titik 12) lebih tinggi dari Pergelangan (Titik 0)
+          if (landmarks[12].y < landmarks[0].y - 0.1) {
+            detected = true;
+            const x = landmarks[9].x * canvasElement.width;
+            const y = landmarks[9].y * canvasElement.height;
+            
+            // Lukis Lingkaran Merah SOS
+            canvasCtx.beginPath();
+            canvasCtx.arc(x, y, 90, 0, 2 * Math.PI);
+            canvasCtx.strokeStyle = "#ff3d00";
+            canvasCtx.lineWidth = 8;
+            canvasCtx.stroke();
+            
+            // Teks SOS!
+            canvasCtx.fillStyle = "#ff3d00";
+            canvasCtx.font = "bold 50px Arial";
+            canvasCtx.fillText("SOS!", x - 50, y - 110);
+          }
+        }
+      }
+
+      if (detected) {
+        sidePanel.classList.add('alert-active');
+        statusLabel.innerText = "🚨 SOS DIKESAN!";
+        statusLabel.style.color = "#ff3d00";
+        infoText.innerHTML = "<b style='color:white'>Tindakan:</b> Isyarat kecemasan dikenal pasti secara automatik.";
+        gpsCoord.innerText = "GPS: 5.4981, 100.5284";
+      } else {
+        sidePanel.classList.remove('alert-active');
+        statusLabel.innerText = "✅ SISTEM NORMAL";
+        statusLabel.style.color = "#4CAF50";
+        infoText.innerText = "Drone sedang mengimbas kawasan untuk isyarat lambaian...";
+        gpsCoord.innerText = "GPS: Scanning...";
+      }
+      canvasCtx.restore();
+    }
+
+    const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+    hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    hands.onResults(onResults);
+
+    async function sendFrame() {
+      if (!videoElement.paused && !videoElement.ended) {
+        await hands.send({image: videoElement});
+      }
+      requestAnimationFrame(sendFrame);
+    }
+
+    videoElement.onplay = () => sendFrame();
+  </script>
+</body>
+</html>
